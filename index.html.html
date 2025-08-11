@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Late-Joiner Penalty Calculator</title>
+<meta name="color-scheme" content="light dark" />
+<style>
+  :root{
+    --bg:#f6f8fc; --card:#ffffff; --ink:#0f172a; --muted:#6b7280;
+    --brand:#12284e; --accent:#10bcd6; --border:#e5e7eb;
+    --pen-red:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b1220; --card:#0f1526; --ink:#e5e7eb; --muted:#94a3b8; --border:#1f2937;
+      --pen-red:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  .wrap{max-width:680px;margin:0 auto;padding:20px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  h1{margin:0 0 8px;font-size:clamp(20px,4vw,28px);font-weight:800;color:var(--brand)}
+  .sub{color:var(--muted);font-size:15px;margin-bottom:14px}
+
+  label{display:block;font-weight:700;margin:14px 0 8px}
+  .input{width:100%;padding:14px;border:1px solid var(--border);border-radius:12px;font:inherit;background:#fff;color:var(--ink)}
+  @media (prefers-color-scheme: dark){ .input{ background:#0b1020 } }
+  .row{display:grid;grid-template-columns:1fr;gap:12px}
+  @media (min-width:520px){ .row{grid-template-columns:1fr 1fr} }
+
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:100%;padding:16px 18px;border:0;border-radius:14px;
+    background:linear-gradient(135deg,var(--brand),var(--accent));color:#fff;font-weight:800;font-size:17px;cursor:pointer
+  }
+  .btn.secondary{background:#eef2ff;color:#1f2a5a;border:1px solid #dbeafe}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn:active{transform:translateY(1px)}
+
+  .result{margin-top:16px;display:none;grid-template-columns:1fr 1fr;gap:12px}
+  .box{background:rgba(16,188,214,.08);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center}
+  .k{font-size:13px;color:#6b7280}
+  .v{font-size:clamp(22px,5vw,28px);font-weight:900;margin-top:4px}
+  /* On-screen Penalty %: bold + red + bigger */
+  #penaltyPct.v{color:var(--pen-red);font-size:clamp(26px,6vw,34px)}
+
+  .err{margin-top:10px;color:#b91c1c;font-size:14px;display:none}
+
+  /* PRINT STYLES (for PDF) */
+  @media print{
+    @page{ size:A4; margin:16mm }
+    body{ background:#fff }
+    .wrap{ max-width:none; padding:0 }
+    .card{ border:0; box-shadow:none; padding:0 }
+    .screen-only{ display:none !important }   /* hide buttons & tips on PDF */
+    .intro{ display:none !important }         /* hide on-screen header on PDF */
+    .row{ display:none !important }           /* hide input fields on PDF */
+    .result{ display:none !important }        /* hide on-screen result boxes on PDF */
+    #printSheet{ display:block !important }   /* show dedicated PDF header/results */
+  }
+
+  /* Printable sheet layout (no table) */
+  #printSheet{display:none;color:#111827;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  #printDate{color:#6b7280;margin:0 0 8px}
+  #printHeader{font-size:22px;font-weight:800;margin:0 0 8px;color:var(--brand)}
+  #printExplain{color:#374151;font-size:14px;margin:0 0 14px}
+  #printResults{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  #printResults .box{background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:14px;text-align:center}
+  #printResults .k{font-size:12px;color:#6b7280}
+  #printResults .v{font-size:22px;font-weight:900;margin-top:4px}
+  /* PDF Penalty %: bold + red + bigger */
+  #printResults .penalty .v{color:var(--pen-red);font-size:34px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <!-- On-screen header -->
+      <div class="intro">
+        <h1>Late-Joiner Penalty Calculator</h1>
+        <div class="sub">
+          A late-joiner penalty is an extra percentage added to the risk portion of your medical scheme premium if you join after the age of 35. 
+          The penalty depends on the number of years you’ve been without cover since turning 35:
+          <ul style="margin:10px 0 0 18px;padding:0">
+            <li>1–4 years: <strong>5%</strong></li>
+            <li>5–14 years: <strong>25%</strong></li>
+            <li>15–24 years: <strong>50%</strong></li>
+            <li>25+ years: <strong>75%</strong></li>
+          </ul>
+          <div style="margin-top:10px">
+            It’s permanent once applied and usually carries over if you move to another scheme. Years of verified previous medical scheme membership reduce or remove the penalty.
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="age">Current Age</label>
+          <input id="age" class="input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" step="1" placeholder="e.g. 42" />
+        </div>
+        <div>
+          <label for="yearsCovered">Creditable Coverage – Years</label>
+          <input id="yearsCovered" class="input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" step="1" placeholder="e.g. 5" />
+        </div>
+      </div>
+
+      <!-- Buttons are hidden in PDF via .screen-only -->
+      <div class="actions screen-only">
+        <button class="btn" id="calcBtn" aria-label="Calculate penalty">Calculate</button>
+        <button class="btn secondary" id="pdfBtn" aria-label="Download PDF" disabled>Download PDF</button>
+      </div>
+
+      <div id="error" class="err">Please enter a valid age (0 or higher).</div>
+
+      <!-- On-screen results -->
+      <div class="result" id="result">
+        <div class="box">
+          <div class="k">Years without cover (A)</div>
+          <div id="yearsA" class="v">0</div>
+        </div>
+        <div class="box">
+          <div class="k">Penalty %</div>
+          <div id="penaltyPct" class="v">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRINT-ONLY SHEET (date → title → summary → KPI results) -->
+    <div id="printSheet" aria-hidden="true">
+      <div id="printDate"></div>
+      <div id="printHeader">Late-Joiner Penalty Calculator</div>
+      <div id="printExplain">
+        A late-joiner penalty is an extra percentage added to the risk portion of your medical scheme premium if you join after the age of 35. 
+        The penalty depends on the number of years you’ve been without cover since turning 35:
+        <div style="margin:6px 0 0 0">
+          <strong>1–4 years:</strong> <strong>5%</strong> &nbsp;•&nbsp;
+          <strong>5–14 years:</strong> <strong>25%</strong> &nbsp;•&nbsp;
+          <strong>15–24 years:</strong> <strong>50%</strong> &nbsp;•&nbsp;
+          <strong>25+ years:</strong> <strong>75%</strong>
+        </div>
+        <div style="margin-top:8px">
+          It’s permanent once applied and usually carries over if you move to another scheme. Years of verified previous medical scheme membership reduce or remove the penalty.
+        </div>
+      </div>
+      <div id="printResults">
+        <div class="box">
+          <div class="k">Current age (B)</div>
+          <div id="p_age" class="v">—</div>
+        </div>
+        <div class="box">
+          <div class="k">Creditable coverage (C)</div>
+          <div id="p_cov" class="v">—</div>
+        </div>
+        <div class="box">
+          <div class="k">Years without cover (A)</div>
+          <div id="p_A" class="v">—</div>
+        </div>
+        <div class="box penalty">
+          <div class="k">Penalty %</div>
+          <div id="p_pct" class="v">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const ageEl = document.getElementById('age');
+  const covEl = document.getElementById('yearsCovered');
+  const calcBtn = document.getElementById('calcBtn');
+  const pdfBtn  = document.getElementById('pdfBtn');
+  const res = document.getElementById('result');
+  const yearsA = document.getElementById('yearsA');
+  const penaltyPct = document.getElementById('penaltyPct');
+  const err = document.getElementById('error');
+
+  function compute(age, covered){
+    const A = Math.floor(age - (35 + covered));
+    let pct = 0;
+    if (A >= 1 && A <= 4) pct = 5;
+    else if (A >= 5 && A <= 14) pct = 25;
+    else if (A >= 15 && A <= 24) pct = 50;
+    else if (A >= 25) pct = 75;
+    return { A: A > 0 ? A : 0, pct };
+  }
+
+  function calculate(){
+    const age = parseInt((ageEl.value||'').trim(), 10);
+    const covered = parseInt((covEl.value||'0').trim(), 10) || 0;
+
+    if (isNaN(age) || age < 0){
+      err.style.display = 'block';
+      res.style.display = 'none';
+      pdfBtn.disabled = true;
+      return null;
+    }
+    err.style.display = 'none';
+
+    const {A, pct} = compute(age, covered);
+    yearsA.textContent = A;
+    penaltyPct.textContent = pct + '%';
+    res.style.display = 'grid';
+    pdfBtn.disabled = false;
+    return {age, covered, A, pct};
+  }
+
+  function fillPrintSheet(data){
+    const now = new Date();
+    const dateStr = now.toLocaleString(undefined, {year:'numeric', month:'long', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+    document.getElementById('printDate').textContent = `Generated: ${dateStr}`;
+    document.getElementById('p_age').textContent = data.age ?? '—';
+    document.getElementById('p_cov').textContent = `${data.covered ?? '—'} year(s)`;
+    document.getElementById('p_A').textContent = data.A ?? '—';
+    document.getElementById('p_pct').textContent = (data.pct ?? '—') + (data.pct!=null ? '%' : '');
+  }
+
+  calcBtn.addEventListener('click', calculate);
+
+  pdfBtn.addEventListener('click', ()=>{
+    const data = calculate();
+    if(!data) return;
+    fillPrintSheet(data);
+    setTimeout(()=>window.print(), 40);
+  });
+})();
+</script>
+</body>
+</html>
+
